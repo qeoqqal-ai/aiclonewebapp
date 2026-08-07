@@ -1,0 +1,1223 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Telegram</title>
+    <!-- Telegram Web App SDK (обязательно для работы в мини-приложении) -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        :root {
+            --bg: #0e1621;
+            --bg-chat: #0e1621;
+            --header-bg: #17212b;
+            --input-bg: #17212b;
+            --bubble-in: #182533;
+            --bubble-out: #2b5278;
+            --text: #f5f5f5;
+            --text-dim: #708499;
+            --accent: #4d9fec;
+            --border: #1c2733;
+            --time: #708499;
+            --tick: #4fc3f7;
+        }
+
+        html, body {
+            height: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            height: 100dvh;
+        }
+
+        /* ===== ШАПКА ЧАТА ===== */
+        .chat-header {
+            background: var(--header-bg);
+            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-shrink: 0;
+            box-shadow: 0 1px 0 var(--border);
+            z-index: 10;
+            min-height: 56px;
+        }
+
+        .back-btn {
+            background: none;
+            border: none;
+            color: var(--accent);
+            font-size: 24px;
+            cursor: pointer;
+            padding: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            transition: background 0.2s;
+        }
+
+        .back-btn:hover {
+            background: rgba(77, 159, 236, 0.1);
+        }
+
+        .avatar {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: 600;
+            color: #fff;
+            flex-shrink: 0;
+            position: relative;
+        }
+
+        .avatar.online::after {
+            content: '';
+            position: absolute;
+            bottom: 1px;
+            right: 1px;
+            width: 12px;
+            height: 12px;
+            background: #4caf50;
+            border: 2px solid var(--header-bg);
+            border-radius: 50%;
+        }
+
+        .chat-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .chat-name {
+            font-size: 16px;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .chat-status {
+            font-size: 13px;
+            color: var(--text-dim);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 4px;
+        }
+
+        .header-btn {
+            background: none;
+            border: none;
+            color: var(--accent);
+            font-size: 20px;
+            cursor: pointer;
+            padding: 6px;
+            border-radius: 50%;
+            width: 38px;
+            height: 38px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+
+        .header-btn:hover {
+            background: rgba(77, 159, 236, 0.1);
+        }
+
+        /* ===== ОБЛАСТЬ СООБЩЕНИЙ ===== */
+        .messages-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            background: var(--bg-chat);
+            scroll-behavior: smooth;
+        }
+
+        .messages-area::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .messages-area::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px;
+        }
+
+        /* Дата-разделитель */
+        .date-divider {
+            text-align: center;
+            margin: 8px 0;
+        }
+
+        .date-divider span {
+            background: var(--header-bg);
+            color: var(--text-dim);
+            font-size: 12px;
+            padding: 4px 12px;
+            border-radius: 12px;
+            display: inline-block;
+        }
+
+        /* Сообщение */
+        .message {
+            max-width: 78%;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            animation: msgIn 0.2s ease;
+        }
+
+        @keyframes msgIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.in {
+            align-self: flex-start;
+        }
+
+        .message.out {
+            align-self: flex-end;
+        }
+
+        .bubble {
+            padding: 8px 12px;
+            border-radius: 14px;
+            font-size: 15px;
+            line-height: 1.4;
+            word-wrap: break-word;
+            position: relative;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        }
+
+        .message.in .bubble {
+            background: var(--bubble-in);
+            border-top-left-radius: 4px;
+        }
+
+        .message.out .bubble {
+            background: var(--bubble-out);
+            border-top-right-radius: 4px;
+        }
+
+        .bubble .text {
+            white-space: pre-wrap;
+        }
+
+        .bubble .meta {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 4px;
+            margin-top: 2px;
+            float: right;
+            margin-left: 8px;
+            margin-bottom: -4px;
+        }
+
+        .bubble .time {
+            font-size: 11px;
+            color: var(--time);
+        }
+
+        .message.out .bubble .time {
+            color: rgba(255,255,255,0.6);
+        }
+
+        .bubble .ticks {
+            font-size: 11px;
+            color: var(--tick);
+            display: flex;
+            align-items: center;
+        }
+
+        .bubble .ticks.read {
+            color: var(--tick);
+        }
+
+        /* Служебное сообщение (центр) */
+        .service-msg {
+            text-align: center;
+            margin: 8px 0;
+        }
+
+        .service-msg span {
+            background: var(--header-bg);
+            color: var(--text-dim);
+            font-size: 13px;
+            padding: 6px 14px;
+            border-radius: 14px;
+            display: inline-block;
+        }
+
+        /* ===== ПАНЕЛЬ ВВОДА ===== */
+        .input-bar {
+            background: var(--input-bg);
+            padding: 8px 10px;
+            display: flex;
+            align-items: flex-end;
+            gap: 8px;
+            flex-shrink: 0;
+            border-top: 1px solid var(--border);
+            padding-bottom: calc(8px + env(safe-area-inset-bottom));
+        }
+
+        .attach-btn {
+            background: none;
+            border: none;
+            color: var(--accent);
+            font-size: 24px;
+            cursor: pointer;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            flex-shrink: 0;
+            transition: background 0.2s;
+        }
+
+        .attach-btn:hover {
+            background: rgba(77, 159, 236, 0.1);
+        }
+
+        .input-wrapper {
+            flex: 1;
+            background: var(--bg);
+            border-radius: 20px;
+            padding: 8px 14px;
+            display: flex;
+            align-items: center;
+            min-height: 40px;
+        }
+
+        .input-wrapper input {
+            flex: 1;
+            background: none;
+            border: none;
+            outline: none;
+            color: var(--text);
+            font-size: 15px;
+            font-family: inherit;
+        }
+
+        .input-wrapper input::placeholder {
+            color: var(--text-dim);
+        }
+
+        .emoji-btn {
+            background: none;
+            border: none;
+            color: var(--text-dim);
+            font-size: 20px;
+            cursor: pointer;
+            padding: 2px;
+            margin-left: 6px;
+        }
+
+        .send-btn {
+            background: var(--accent);
+            border: none;
+            color: #fff;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            flex-shrink: 0;
+            transition: transform 0.2s, background 0.2s;
+        }
+
+        .send-btn:hover {
+            background: #3d8bdb;
+            transform: scale(1.05);
+        }
+
+        .send-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* ===== ВСПЛЫВАЮЩЕЕ МЕНЮ ===== */
+        .context-menu {
+            position: fixed;
+            background: var(--header-bg);
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+            padding: 6px 0;
+            min-width: 200px;
+            z-index: 1000;
+            display: none;
+            animation: menuIn 0.15s ease;
+        }
+
+        @keyframes menuIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .context-menu.show {
+            display: block;
+        }
+
+        .context-menu .menu-item {
+            padding: 10px 16px;
+            font-size: 15px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: background 0.15s;
+        }
+
+        .context-menu .menu-item:hover {
+            background: rgba(77, 159, 236, 0.1);
+        }
+
+        .context-menu .menu-item.danger {
+            color: #ff6b6b;
+        }
+
+        .context-menu .menu-item .icon {
+            font-size: 18px;
+            width: 24px;
+            text-align: center;
+        }
+
+        /* Оверлей */
+        .overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.4);
+            z-index: 999;
+            display: none;
+        }
+
+        .overlay.show {
+            display: block;
+        }
+
+        /* ===== ПРОФИЛЬ (шторка) ===== */
+        .profile-sheet {
+            position: fixed;
+            top: 0;
+            right: -100%;
+            width: 100%;
+            max-width: 420px;
+            height: 100%;
+            background: var(--header-bg);
+            z-index: 1001;
+            transition: right 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            box-shadow: -4px 0 20px rgba(0,0,0,0.4);
+        }
+
+        .profile-sheet.open {
+            right: 0;
+        }
+
+        .profile-header {
+            padding: 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .profile-header .close-btn {
+            background: none;
+            border: none;
+            color: var(--accent);
+            font-size: 22px;
+            cursor: pointer;
+            padding: 4px;
+        }
+
+        .profile-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .profile-avatar {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            font-weight: 600;
+            color: #fff;
+            margin: 0 auto 16px;
+        }
+
+        .profile-name {
+            font-size: 22px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .profile-status {
+            color: var(--text-dim);
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+
+        .profile-info {
+            background: var(--bg);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: left;
+            margin-bottom: 12px;
+        }
+
+        .profile-info .label {
+            color: var(--text-dim);
+            font-size: 13px;
+            margin-bottom: 4px;
+        }
+
+        .profile-info .value {
+            font-size: 15px;
+        }
+
+        .profile-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 16px;
+        }
+
+        .profile-actions button {
+            background: var(--bg);
+            border: none;
+            color: var(--text);
+            padding: 14px;
+            border-radius: 12px;
+            font-size: 15px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: background 0.2s;
+        }
+
+        .profile-actions button:hover {
+            background: var(--card-hover, #222634);
+        }
+
+        .profile-actions button.danger {
+            color: #ff6b6b;
+        }
+
+        /* ===== МОДАЛКА РЕДАКТИРОВАНИЯ ===== */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            z-index: 1500;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .modal-overlay.show {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--header-bg);
+            border-radius: 16px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+            animation: modalIn 0.25s ease;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        @keyframes modalIn {
+            from { opacity: 0; transform: scale(0.9) translateY(20px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        .modal-header {
+            padding: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border);
+            font-size: 17px;
+            font-weight: 600;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-dim);
+            font-size: 18px;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 50%;
+        }
+
+        .modal-close:hover {
+            background: rgba(255,255,255,0.05);
+        }
+
+        .modal-body {
+            padding: 20px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .edit-avatar-wrap {
+            position: relative;
+            width: 100px;
+            height: 100px;
+            margin: 0 auto 20px;
+            cursor: pointer;
+        }
+
+        .edit-avatar {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            font-weight: 600;
+            color: #fff;
+            overflow: hidden;
+        }
+
+        .edit-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .edit-avatar-overlay {
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            background: rgba(0,0,0,0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .edit-avatar-wrap:hover .edit-avatar-overlay {
+            opacity: 1;
+        }
+
+        .edit-label {
+            display: block;
+            color: var(--text-dim);
+            font-size: 13px;
+            margin-bottom: 6px;
+            margin-top: 14px;
+        }
+
+        .edit-input {
+            width: 100%;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px 14px;
+            color: var(--text);
+            font-size: 15px;
+            font-family: inherit;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .edit-input:focus {
+            border-color: var(--accent);
+        }
+
+        .edit-textarea {
+            resize: none;
+            min-height: 80px;
+        }
+
+        .modal-footer {
+            padding: 16px;
+            display: flex;
+            gap: 10px;
+            border-top: 1px solid var(--border);
+        }
+
+        .modal-btn {
+            flex: 1;
+            padding: 12px;
+            border-radius: 10px;
+            border: none;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .modal-btn.cancel {
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        .modal-btn.cancel:hover {
+            background: var(--card-hover, #222634);
+        }
+
+        .modal-btn.save {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        .modal-btn.save:hover {
+            background: #3d8bdb;
+        }
+
+        /* ===== ТОСТ ===== */
+        .toast {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%) translateY(20px);
+            background: var(--header-bg);
+            color: var(--text);
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+            opacity: 0;
+            transition: all 0.3s ease;
+            z-index: 2000;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ===== ШАПКА ЧАТА ===== -->
+    <div class="chat-header">
+        <button class="back-btn" onclick="showToast('Назад')">←</button>
+        <div class="avatar online" onclick="openProfile()">А</div>
+        <div class="chat-info" onclick="openProfile()">
+            <div class="chat-name">Алексей</div>
+            <div class="chat-status">был(а) недавно</div>
+        </div>
+        <div class="header-actions">
+            <button class="header-btn" onclick="showToast('Поиск')">🔍</button>
+            <button class="header-btn" onclick="showToast('Ещё')">⋮</button>
+        </div>
+    </div>
+
+    <!-- ===== СООБЩЕНИЯ ===== -->
+    <div class="messages-area" id="messagesArea">
+
+        <div class="date-divider"><span>Сегодня</span></div>
+
+        <!-- Входящее -->
+        <div class="message in">
+            <div class="bubble">
+                <span class="text">Привет! Как дела?</span>
+                <span class="meta">
+                    <span class="time">10:24</span>
+                </span>
+            </div>
+        </div>
+
+        <!-- Исходящее -->
+        <div class="message out">
+            <div class="bubble">
+                <span class="text">Привет! Всё отлично, а у тебя?</span>
+                <span class="meta">
+                    <span class="time">10:25</span>
+                    <span class="ticks">✓✓</span>
+                </span>
+            </div>
+        </div>
+
+        <!-- Входящее -->
+        <div class="message in">
+            <div class="bubble">
+                <span class="text">Тоже хорошо! Слушай, я тут подумал...</span>
+                <span class="meta">
+                    <span class="time">10:26</span>
+                </span>
+            </div>
+        </div>
+
+        <!-- Исходящее -->
+        <div class="message out">
+            <div class="bubble">
+                <span class="text">Что именно?</span>
+                <span class="meta">
+                    <span class="time">10:26</span>
+                    <span class="ticks">✓✓</span>
+                </span>
+            </div>
+        </div>
+
+        <!-- Входящее -->
+        <div class="message in">
+            <div class="bubble">
+                <span class="text">Может встретимся на выходных? Погода обещает быть отличной ☀️</span>
+                <span class="meta">
+                    <span class="time">10:27</span>
+                </span>
+            </div>
+        </div>
+
+        <!-- Исходящее -->
+        <div class="message out">
+            <div class="bubble">
+                <span class="text">Давай! В субботу в парке? 🎉</span>
+                <span class="meta">
+                    <span class="time">10:28</span>
+                    <span class="ticks">✓✓</span>
+                </span>
+            </div>
+        </div>
+
+        <!-- Входящее -->
+        <div class="message in">
+            <div class="bubble">
+                <span class="text">Отлично, договорились! В 14:00 у фонтана 👍</span>
+                <span class="meta">
+                    <span class="time">10:29</span>
+                </span>
+            </div>
+        </div>
+
+        <!-- Исходящее -->
+        <div class="message out">
+            <div class="bubble">
+                <span class="text">Буду! До встречи 👋</span>
+                <span class="meta">
+                    <span class="time">10:30</span>
+                    <span class="ticks">✓✓</span>
+                </span>
+            </div>
+        </div>
+
+        <!-- Служебное сообщение -->
+        <div class="service-msg"><span>🔒 Сообщения защищены сквозным шифрованием</span></div>
+
+        <!-- Входящее -->
+        <div class="message in">
+            <div class="bubble">
+                <span class="text">Кстати, ты видел новую функцию с AI-клонами? Говорят, можно клонировать стиль общения 😮</span>
+                <span class="meta">
+                    <span class="time">10:32</span>
+                </span>
+            </div>
+        </div>
+
+        <!-- Исходящее -->
+        <div class="message out">
+            <div class="bubble">
+                <span class="text">Да! Я как раз тестирую. Это невероятно — бот отвечает как настоящий человек 🤖</span>
+                <span class="meta">
+                    <span class="time">10:33</span>
+                    <span class="ticks">✓✓</span>
+                </span>
+            </div>
+        </div>
+
+        <!-- Входящее -->
+        <div class="message in">
+            <div class="bubble">
+                <span class="text">Круто! А можно попробовать?</span>
+                <span class="meta">
+                    <span class="time">10:34</span>
+                </span>
+            </div>
+        </div>
+
+        <!-- Исходящее -->
+        <div class="message out">
+            <div class="bubble">
+                <span class="text">Конечно! Открой бота и нажми «Создать AI-собеседника» 😉</span>
+                <span class="meta">
+                    <span class="time">10:35</span>
+                    <span class="ticks">✓✓</span>
+                </span>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ===== ПАНЕЛЬ ВВОДА ===== -->
+    <div class="input-bar">
+        <button class="attach-btn" onclick="showToast('Прикрепить')">📎</button>
+        <div class="input-wrapper">
+            <input type="text" id="messageInput" placeholder="Сообщение" autocomplete="off">
+            <button class="emoji-btn" onclick="showToast('Эмодзи')">😊</button>
+        </div>
+        <button class="send-btn" onclick="sendMessage()">➤</button>
+    </div>
+
+    <!-- ===== КОНТЕКСТНОЕ МЕНЮ ===== -->
+    <div class="overlay" id="overlay" onclick="closeMenu()"></div>
+    <div class="context-menu" id="contextMenu">
+        <div class="menu-item" onclick="showToast('Ответить')"><span class="icon">↩️</span> Ответить</div>
+        <div class="menu-item" onclick="showToast('Копировать')"><span class="icon">📋</span> Копировать</div>
+        <div class="menu-item" onclick="showToast('Переслать')"><span class="icon">➡️</span> Переслать</div>
+        <div class="menu-item" onclick="showToast('Избранное')"><span class="icon">⭐</span> Избранное</div>
+        <div class="menu-item" onclick="showToast('Удалить')"><span class="icon">🗑️</span> Удалить</div>
+        <div class="menu-item danger" onclick="showToast('Заблокировать')"><span class="icon">🚫</span> Заблокировать</div>
+    </div>
+
+    <!-- ===== ПРОФИЛЬ (шторка) ===== -->
+    <div class="profile-sheet" id="profileSheet">
+        <div class="profile-header">
+            <button class="close-btn" onclick="closeProfile()">←</button>
+            <span style="font-size: 18px; font-weight: 600;">Профиль</span>
+        </div>
+        <div class="profile-body">
+            <div class="profile-avatar">А</div>
+            <div class="profile-name">Алексей</div>
+            <div class="profile-status">был(а) недавно</div>
+
+            <div class="profile-info">
+                <div class="label">Телефон</div>
+                <div class="value">+7 (900) 123-45-67</div>
+            </div>
+
+            <div class="profile-info">
+                <div class="label">О себе</div>
+                <div class="value">Люблю путешествия и кофе ☕</div>
+            </div>
+
+            <div class="profile-actions">
+                <button onclick="openEditProfile()">✏️ Редактировать профиль</button>
+                <button onclick="showToast('Написать сообщение')">💬 Написать сообщение</button>
+                <button onclick="showToast('Звонок')">📞 Звонок</button>
+                <button onclick="showToast('Видеозвонок')">📹 Видеозвонок</button>
+                <button onclick="showToast('Поиск')">🔍 Поиск</button>
+                <button class="danger" onclick="showToast('Заблокировать')">🚫 Заблокировать</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== МОДАЛКА РЕДАКТИРОВАНИЯ ПРОФИЛЯ ===== -->
+    <div class="modal-overlay" id="editModal" onclick="closeEditProfile()">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <span>Редактировать профиль</span>
+                <button class="modal-close" onclick="closeEditProfile()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="edit-avatar-wrap" onclick="document.getElementById('avatarInput').click()">
+                    <div class="edit-avatar" id="editAvatar">А</div>
+                    <div class="edit-avatar-overlay">📷</div>
+                </div>
+                <input type="file" id="avatarInput" accept="image/*" style="display:none">
+
+                <label class="edit-label">Имя</label>
+                <input type="text" class="edit-input" id="editName" placeholder="Имя собеседника">
+
+                <label class="edit-label">Номер телефона</label>
+                <input type="text" class="edit-input" id="editPhone" placeholder="+7 (900) 000-00-00">
+
+                <label class="edit-label">О себе</label>
+                <textarea class="edit-input edit-textarea" id="editBio" placeholder="Расскажите о себе..."></textarea>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn cancel" onclick="closeEditProfile()">Отмена</button>
+                <button class="modal-btn save" onclick="saveProfile()">Сохранить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== ТОСТ ===== -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // ===== ИНИЦИАЛИЗАЦИЯ TELEGRAM WEB APP =====
+        const tg = window.Telegram && window.Telegram.WebApp;
+        if (tg) {
+            tg.ready();
+            tg.expand();
+            try {
+                tg.setHeaderColor && tg.setHeaderColor('#17212b');
+                tg.setBackgroundColor && tg.setBackgroundColor('#0e1621');
+            } catch (e) {}
+        }
+
+        // ===== ОТПРАВКА СООБЩЕНИЯ =====
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const text = input.value.trim();
+            if (!text) return;
+
+            const area = document.getElementById('messagesArea');
+            const now = new Date();
+            const time = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+
+            const msg = document.createElement('div');
+            msg.className = 'message out';
+            msg.innerHTML = `
+                <div class="bubble">
+                    <span class="text"></span>
+                    <span class="meta">
+                        <span class="time">${time}</span>
+                        <span class="ticks">✓</span>
+                    </span>
+                </div>
+            `;
+            msg.querySelector('.text').textContent = text;
+
+            area.appendChild(msg);
+            input.value = '';
+            area.scrollTop = area.scrollHeight;
+
+            // Имитация ответа (позже заменим на реальный AI-ответ)
+            setTimeout(() => {
+                const reply = document.createElement('div');
+                reply.className = 'message in';
+                reply.innerHTML = `
+                    <div class="bubble">
+                        <span class="text"></span>
+                        <span class="meta">
+                            <span class="time">${time}</span>
+                        </span>
+                    </div>
+                `;
+                reply.querySelector('.text').textContent = 'Это ответ от AI-клона. Позже здесь будет реальная интеграция с DeepSeek.';
+                area.appendChild(reply);
+                area.scrollTop = area.scrollHeight;
+            }, 800);
+        }
+
+        // Отправка по Enter
+        document.getElementById('messageInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // ===== КОНТЕКСТНОЕ МЕНЮ (долгое нажатие на сообщение) =====
+        let longPressTimer;
+        let longPressTriggered = false;
+
+        document.querySelectorAll('.message').forEach(msg => {
+            msg.addEventListener('touchstart', function(e) {
+                longPressTriggered = false;
+                longPressTimer = setTimeout(() => {
+                    longPressTriggered = true;
+                    openMenu(e);
+                }, 500);
+            });
+
+            msg.addEventListener('touchend', function() {
+                clearTimeout(longPressTimer);
+            });
+
+            msg.addEventListener('touchmove', function() {
+                clearTimeout(longPressTimer);
+            });
+
+            // Для ПК — правый клик
+            msg.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+                openMenu(e);
+            });
+        });
+
+        function openMenu(e) {
+            const menu = document.getElementById('contextMenu');
+            const overlay = document.getElementById('overlay');
+
+            const x = e.clientX || e.touches[0].clientX;
+            const y = e.clientY || e.touches[0].clientY;
+
+            menu.style.left = Math.min(x, window.innerWidth - 220) + 'px';
+            menu.style.top = Math.min(y, window.innerHeight - 280) + 'px';
+
+            menu.classList.add('show');
+            overlay.classList.add('show');
+        }
+
+        function closeMenu() {
+            document.getElementById('contextMenu').classList.remove('show');
+            document.getElementById('overlay').classList.remove('show');
+        }
+
+        // ===== ПРОФИЛЬ =====
+        let profileData = {
+            name: 'Алексей',
+            phone: '+7 (900) 123-45-67',
+            bio: 'Люблю путешествия и кофе ☕',
+            avatar: null
+        };
+
+        function loadProfileData() {
+            const saved = localStorage.getItem('ai_clone_profile');
+            if (saved) {
+                try {
+                    profileData = JSON.parse(saved);
+                } catch (e) {
+                    console.error('Ошибка загрузки профиля:', e);
+                }
+            }
+            applyProfileToUI();
+        }
+
+        function applyProfileToUI() {
+            document.querySelector('.chat-name').textContent = profileData.name;
+
+            const headerAvatar = document.querySelector('.chat-header .avatar');
+            if (profileData.avatar) {
+                headerAvatar.innerHTML = `<img src="${profileData.avatar}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+                headerAvatar.style.background = 'none';
+            } else {
+                headerAvatar.innerHTML = profileData.name.charAt(0).toUpperCase();
+                headerAvatar.style.background = 'linear-gradient(135deg, #6c5ce7, #a29bfe)';
+            }
+
+            document.querySelector('.profile-avatar').textContent = profileData.name.charAt(0).toUpperCase();
+            document.querySelector('.profile-name').textContent = profileData.name;
+            document.querySelectorAll('.profile-info .value')[0].textContent = profileData.phone;
+            document.querySelectorAll('.profile-info .value')[1].textContent = profileData.bio;
+        }
+
+        function openProfile() {
+            document.getElementById('profileSheet').classList.add('open');
+            loadProfileData();
+        }
+
+        function closeProfile() {
+            document.getElementById('profileSheet').classList.remove('open');
+        }
+
+        // ===== РЕДАКТИРОВАНИЕ ПРОФИЛЯ =====
+        function openEditProfile() {
+            document.getElementById('editName').value = profileData.name;
+            document.getElementById('editPhone').value = profileData.phone;
+            document.getElementById('editBio').value = profileData.bio;
+
+            const editAvatar = document.getElementById('editAvatar');
+            if (profileData.avatar) {
+                editAvatar.innerHTML = `<img src="${profileData.avatar}">`;
+                editAvatar.style.background = 'none';
+            } else {
+                editAvatar.textContent = profileData.name.charAt(0).toUpperCase();
+                editAvatar.style.background = 'linear-gradient(135deg, #6c5ce7, #a29bfe)';
+            }
+
+            document.getElementById('editModal').classList.add('show');
+        }
+
+        function closeEditProfile() {
+            document.getElementById('editModal').classList.remove('show');
+        }
+
+        document.getElementById('avatarInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                profileData.avatar = event.target.result;
+                const editAvatar = document.getElementById('editAvatar');
+                editAvatar.innerHTML = `<img src="${profileData.avatar}">`;
+                editAvatar.style.background = 'none';
+            };
+            reader.readAsDataURL(file);
+        });
+
+        function saveProfile() {
+            const name = document.getElementById('editName').value.trim();
+            const phone = document.getElementById('editPhone').value.trim();
+            const bio = document.getElementById('editBio').value.trim();
+
+            if (!name) {
+                showToast('Введите имя');
+                return;
+            }
+
+            profileData.name = name;
+            profileData.phone = phone || 'Не указан';
+            profileData.bio = bio || 'Не указано';
+
+            localStorage.setItem('ai_clone_profile', JSON.stringify(profileData));
+
+            applyProfileToUI();
+            closeEditProfile();
+            showToast('✅ Профиль сохранён');
+        }
+
+        loadProfileData();
+
+        // ===== ТОСТ =====
+        let toastTimer;
+        function showToast(text) {
+            const toast = document.getElementById('toast');
+            toast.textContent = text;
+            toast.classList.add('show');
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => {
+                toast.classList.remove('show');
+            }, 2000);
+        }
+
+        // Прокрутка вниз при загрузке
+        window.addEventListener('load', () => {
+            const area = document.getElementById('messagesArea');
+            area.scrollTop = area.scrollHeight;
+        });
+    </script>
+
+</body>
+</html>
