@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AI Собеседник</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        :root {
+            --bg: #0e1621; --bg-chat: #0e1621; --header-bg: #17212b; --input-bg: #17212b;
+            --bubble-in: #182533; --bubble-out: #2b5278; --text: #f5f5f5; --text-dim: #708499;
+            --accent: #4d9fec; --border: #1c2733; --time: #708499; --tick: #4fc3f7;
+        }
+        html, body { height: 100%; overflow: hidden; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            background: var(--bg); color: var(--text); display: flex; flex-direction: column;
+            height: 100vh; height: 100dvh;
+        }
+        .chat-header {
+            background: var(--header-bg); padding: 8px 12px; display: flex; align-items: center;
+            gap: 10px; flex-shrink: 0; box-shadow: 0 1px 0 var(--border); z-index: 10; min-height: 56px;
+        }
+        .back-btn {
+            background: none; border: none; color: var(--accent); font-size: 24px; cursor: pointer;
+            padding: 4px; display: flex; align-items: center; justify-content: center;
+            width: 36px; height: 36px; border-radius: 50%; transition: background 0.2s;
+        }
+        .back-btn:hover { background: rgba(77, 159, 236, 0.1); }
+        .avatar {
+            width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+            display: flex; align-items: center; justify-content: center; font-size: 18px;
+            font-weight: 600; color: #fff; flex-shrink: 0; position: relative;
+        }
+        .avatar.online::after {
+            content: ''; position: absolute; bottom: 1px; right: 1px; width: 12px; height: 12px;
+            background: #4caf50; border: 2px solid var(--header-bg); border-radius: 50%;
+        }
+        .chat-info { flex: 1; min-width: 0; }
+        .chat-name { font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .chat-status { font-size: 13px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .header-actions { display: flex; gap: 4px; }
+        .header-btn {
+            background: none; border: none; color: var(--accent); font-size: 20px; cursor: pointer;
+            padding: 6px; border-radius: 50%; width: 38px; height: 38px; display: flex;
+            align-items: center; justify-content: center; transition: background 0.2s;
+        }
+        .header-btn:hover { background: rgba(77, 159, 236, 0.1); }
+        .setup-screen { flex: 1; display: flex; align-items: center; justify-content: center; padding: 20px; overflow-y: auto; }
+        .setup-card {
+            background: var(--header-bg); border-radius: 16px; padding: 28px 22px;
+            text-align: center; max-width: 340px; width: 100%;
+        }
+        .setup-icon { font-size: 48px; margin-bottom: 14px; }
+        .setup-card h2 { font-size: 18px; margin-bottom: 10px; }
+        .setup-card p { color: var(--text-dim); font-size: 14px; line-height: 1.5; margin-bottom: 18px; }
+        .setup-btn {
+            background: var(--accent); border: none; color: #fff; padding: 13px 28px;
+            border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer;
+            transition: background 0.2s; width: 100%;
+        }
+        .setup-btn:hover { background: #3d8bdb; }
+        .hint { font-size: 12px; margin-top: 14px; margin-bottom: 0; }
+        .messages-area {
+            flex: 1; overflow-y: auto; padding: 12px 10px; display: flex; flex-direction: column;
+            gap: 4px; background: var(--bg-chat); scroll-behavior: smooth;
+        }
+        .messages-area::-webkit-scrollbar { width: 4px; }
+        .messages-area::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+        .message { max-width: 78%; display: flex; flex-direction: column; position: relative; animation: msgIn 0.2s ease; }
+        @keyframes msgIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        .message.in { align-self: flex-start; }
+        .message.out { align-self: flex-end; }
+        .bubble {
+            padding: 8px 12px; border-radius: 14px; font-size: 15px; line-height: 1.4;
+            word-wrap: break-word; position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        }
+        .message.in .bubble { background: var(--bubble-in); border-top-left-radius: 4px; }
+        .message.out .bubble { background: var(--bubble-out); border-top-right-radius: 4px; }
+        .bubble .text { white-space: pre-wrap; }
+        .bubble .meta {
+            display: flex; align-items: center; justify-content: flex-end; gap: 4px;
+            margin-top: 2px; float: right; margin-left: 8px; margin-bottom: -4px;
+        }
+        .bubble .time { font-size: 11px; color: var(--time); }
+        .message.out .bubble .time { color: rgba(255,255,255,0.6); }
+        .bubble .ticks { font-size: 11px; color: var(--tick); display: flex; align-items: center; }
+        .typing {
+            padding: 6px 14px; display: flex; align-items: center; gap: 8px;
+            color: var(--text-dim); font-size: 13px;
+        }
+        .typing .dots { display: inline-flex; gap: 3px; }
+        .typing .dots span {
+            width: 6px; height: 6px; background: var(--text-dim); border-radius: 50%; animation: blink 1.4s infinite;
+        }
+        .typing .dots span:nth-child(2) { animation-delay: 0.2s; }
+        .typing .dots span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes blink { 0%, 80%, 100% { opacity: 0.3; } 40% { opacity: 1; } }
+        .input-bar {
+            background: var(--input-bg); padding: 8px 10px; display: flex; align-items: flex-end;
+            gap: 8px; flex-shrink: 0; border-top: 1px solid var(--border);
+            padding-bottom: calc(8px + env(safe-area-inset-bottom));
+        }
+        .input-wrapper {
+            flex: 1; background: var(--bg); border-radius: 20px; padding: 8px 14px;
+            display: flex; align-items: center; min-height: 40px;
+        }
+        .input-wrapper input {
+            flex: 1; background: none; border: none; outline: none; color: var(--text);
+            font-size: 15px; font-family: inherit;
+        }
+        .input-wrapper input::placeholder { color: var(--text-dim); }
+        .send-btn {
+            background: var(--accent); border: none; color: #fff; width: 40px; height: 40px;
+            border-radius: 50%; cursor: pointer; display: flex; align-items: center;
+            justify-content: center; font-size: 18px; flex-shrink: 0;
+            transition: transform 0.2s, background 0.2s;
+        }
+        .send-btn:hover { background: #3d8bdb; transform: scale(1.05); }
+        .send-btn:active { transform: scale(0.95); }
+        .send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .toast {
+            position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(20px);
+            background: var(--header-bg); color: var(--text); padding: 10px 20px; border-radius: 20px;
+            font-size: 14px; box-shadow: 0 4px 20px rgba(0,0,0,0.4); opacity: 0;
+            transition: all 0.3s ease; z-index: 2000; pointer-events: none; white-space: nowrap; max-width: 90vw;
+        }
+        .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+        /* ===== ПРОФИЛЬ (шторка) ===== */
+        .profile-sheet {
+            position: fixed; top: 0; right: -100%; width: 100%; max-width: 420px; height: 100%;
+            background: var(--header-bg); z-index: 1001; transition: right 0.3s ease;
+            display: flex; flex-direction: column; box-shadow: -4px 0 20px rgba(0,0,0,0.4);
+        }
+        .profile-sheet.open { right: 0; }
+        .profile-header { padding: 16px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); }
+        .profile-header .close-btn { background: none; border: none; color: var(--accent); font-size: 22px; cursor: pointer; padding: 4px; }
+        .profile-body { flex: 1; overflow-y: auto; padding: 20px; text-align: center; }
+        .profile-avatar {
+            width: 100px; height: 100px; border-radius: 50%;
+            background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+            display: flex; align-items: center; justify-content: center; font-size: 40px; font-weight: 600;
+            color: #fff; margin: 0 auto 16px; overflow: hidden;
+        }
+        .profile-avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .profile-name { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+        .profile-status { color: var(--text-dim); font-size: 14px; margin-bottom: 20px; }
+        .profile-info { background: var(--bg); border-radius: 12px; padding: 16px; text-align: left; margin-bottom: 12px; }
+        .profile-info .label { color: var(--text-dim); font-size: 13px; margin-bottom: 4px; }
+        .profile-info .value { font-size: 15px; }
+        .profile-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+        .profile-actions button {
+            background: var(--bg); border: none; color: var(--text); padding: 14px; border-radius: 12px;
+            font-size: 15px; cursor: pointer; display: flex; align-items: center; gap: 10px; transition: background 0.2s;
+        }
+        .profile-actions button:hover { background: var(--card-hover, #222634); }
+        .profile-actions button.danger { color: #ff6b6b; }
+
+        /* ===== МОДАЛКА РЕДАКТИРОВАНИЯ ===== */
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1500; display: none;
+            align-items: center; justify-content: center; padding: 20px;
+        }
+        .modal-overlay.show { display: flex; }
+        .modal {
+            background: var(--header-bg); border-radius: 16px; width: 100%; max-width: 400px;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.5); animation: modalIn 0.25s ease;
+            max-height: 90vh; display: flex; flex-direction: column;
+        }
+        @keyframes modalIn { from { opacity: 0; transform: scale(0.9) translateY(20px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+        .modal-header { padding: 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); font-size: 17px; font-weight: 600; }
+        .modal-close { background: none; border: none; color: var(--text-dim); font-size: 18px; cursor: pointer; padding: 4px 8px; border-radius: 50%; }
+        .modal-close:hover { background: rgba(255,255,255,0.05); }
+        .modal-body { padding: 20px; overflow-y: auto; flex: 1; }
+        .edit-avatar-wrap { position: relative; width: 100px; height: 100px; margin: 0 auto 20px; cursor: pointer; }
+        .edit-avatar {
+            width: 100px; height: 100px; border-radius: 50%; background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+            display: flex; align-items: center; justify-content: center; font-size: 40px; font-weight: 600;
+            color: #fff; overflow: hidden;
+        }
+        .edit-avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .edit-avatar-overlay {
+            position: absolute; inset: 0; border-radius: 50%; background: rgba(0,0,0,0.4);
+            display: flex; align-items: center; justify-content: center; font-size: 28px;
+            opacity: 0; transition: opacity 0.2s;
+        }
+        .edit-avatar-wrap:hover .edit-avatar-overlay { opacity: 1; }
+        .edit-label { display: block; color: var(--text-dim); font-size: 13px; margin-bottom: 6px; margin-top: 14px; }
+        .edit-input {
+            width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+            padding: 12px 14px; color: var(--text); font-size: 15px; font-family: inherit; outline: none;
+            transition: border-color 0.2s;
+        }
+        .edit-input:focus { border-color: var(--accent); }
+        .edit-textarea { resize: none; min-height: 80px; }
+        .modal-footer { padding: 16px; display: flex; gap: 10px; border-top: 1px solid var(--border); }
+        .modal-btn { flex: 1; padding: 12px; border-radius: 10px; border: none; font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+        .modal-btn.cancel { background: var(--bg); color: var(--text); }
+        .modal-btn.cancel:hover { background: var(--card-hover, #222634); }
+        .modal-btn.save { background: var(--accent); color: #fff; }
+        .modal-btn.save:hover { background: #3d8bdb; }
+    </style>
+</head>
+<body>
+
+<div class="chat-header">
+    <button class="back-btn" onclick="Telegram.WebApp.close()">←</button>
+    <div class="avatar online" id="avatar">🤖</div>
+    <div class="chat-info">
+        <div class="chat-name" id="chatName">AI Собеседник</div>
+        <div class="chat-status" id="chatStatus">загрузите файл индивидуальности</div>
+    </div>
+    <div class="header-actions">
+        <button class="header-btn" onclick="resetChat()" title="Сбросить">🗑️</button>
+    </div>
+</div>
+
+<div class="setup-screen" id="setupScreen">
+    <div class="setup-card">
+        <div class="setup-icon">📁</div>
+        <h2>Загрузите файл индивидуальности</h2>
+        <p>Это может быть переписка, характеристика или описание человека, стиль которого нужно скопировать.</p>
+        <button class="setup-btn" onclick="document.getElementById('fileInput').click()">Выбрать файл</button>
+        <input type="file" id="fileInput" accept=".txt,.json,.csv,.md,.log" style="display:none">
+        <p class="hint">Файл хранится только на вашем устройстве (localStorage).</p>
+    </div>
+</div>
+
+<div class="messages-area" id="messagesArea" style="display:none"></div>
+<div class="typing" id="typing" style="display:none">
+    <span id="typingLabel">печатает</span>
+    <span class="dots"><span></span><span></span><span></span></span>
+</div>
+<div class="input-bar" id="inputBar" style="display:none">
+    <div class="input-wrapper">
+        <input type="text" id="messageInput" placeholder="Сообщение" autocomplete="off">
+    </div>
+    <button class="send-btn" id="sendBtn" onclick="sendMessage()">➤</button>
+</div>
+<div class="toast" id="toast"></div>
+
+<!-- ===== ПРОФИЛЬ (шторка) ===== -->
+<div class="profile-sheet" id="profileSheet">
+    <div class="profile-header">
+        <button class="close-btn" onclick="closeProfile()">←</button>
+        <span style="font-size: 18px; font-weight: 600;">Профиль</span>
+    </div>
+    <div class="profile-body">
+        <div class="profile-avatar" id="profileAvatar">🤖</div>
+        <div class="profile-name" id="profileName">AI Собеседник</div>
+        <div class="profile-status">был(а) недавно</div>
+
+        <div class="profile-info">
+            <div class="label">Имя пользователя</div>
+            <div class="value" id="profileUsername">—</div>
+        </div>
+
+        <div class="profile-info">
+            <div class="label">Телефон</div>
+            <div class="value" id="profilePhone">—</div>
+        </div>
+
+        <div class="profile-info">
+            <div class="label">О себе</div>
+            <div class="value" id="profileBio">—</div>
+        </div>
+
+        <div class="profile-actions">
+            <button onclick="openEditProfile()">✏️ Редактировать профиль</button>
+            <button onclick="closeProfile()">💬 Написать сообщение</button>
+        </div>
+    </div>
+</div>
+
+<!-- ===== МОДАЛКА РЕДАКТИРОВАНИЯ ПРОФИЛЯ ===== -->
+<div class="modal-overlay" id="editModal">
+    <div class="modal">
+        <div class="modal-header">
+            <span>Редактировать профиль</span>
+            <button class="modal-close" onclick="closeEditProfile()">✕</button>
+        </div>
+        <div class="modal-body">
+            <div class="edit-avatar-wrap" onclick="document.getElementById('avatarInput').click()">
+                <div class="edit-avatar" id="editAvatar">🤖</div>
+                <div class="edit-avatar-overlay">📷</div>
+            </div>
+            <input type="file" id="avatarInput" accept="image/*" style="display:none">
+
+            <label class="edit-label">Имя</label>
+            <input type="text" class="edit-input" id="editName" placeholder="Имя собеседника">
+
+            <label class="edit-label">Имя пользователя</label>
+            <input type="text" class="edit-input" id="editUsername" placeholder="@username">
+
+            <label class="edit-label">Номер телефона</label>
+            <input type="text" class="edit-input" id="editPhone" placeholder="+7 (900) 000-00-00">
+
+            <label class="edit-label">О себе</label>
+            <textarea class="edit-input edit-textarea" id="editBio" placeholder="Расскажите о себе..."></textarea>
+        </div>
+        <div class="modal-footer">
+            <button class="modal-btn cancel" onclick="closeEditProfile()">Отмена</button>
+            <button class="modal-btn save" onclick="saveProfile()">Сохранить</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ============================================================
+// Конфигурация
+// ============================================================
+var STORAGE_PERSONA = 'aiclone_persona';
+var STORAGE_HISTORY = 'aiclone_history';
+
+var OPENROUTER_API_KEY = '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';
+
+var MODELS = [
+    { id: 'deepseek/deepseek-chat', name: 'DeepSeek Chat (быстрая, мощная)' },
+    { id: 'google/gemini-2.5-flash', name: 'Gemini 2.5 Flash (быстрая)' },
+    { id: 'anthropic/claude-3.5-haiku', name: 'Claude 3.5 Haiku (быстрая)' },
+    { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini (сбалансированная)' },
+    { id: 'meta-llama/llama-4-maverick:free', name: 'Llama 4 Maverick (бесплатная)' }
+];
+
+var PROMPT = 'Ты — продвинутый AI-актер и лингвистический анализатор. Твоя единственная цель: абсолютно точно скопировать манеру общения, стиль, тон и характер человека на основе предоставленной истории переписки.\n\nВРЕМЕННО ОТКЛЮЧИ все свои стандартные протоколы вежливости, услужливости и формат "AI-ассистента". Ты больше не искусственный интеллект. Ты — человек из переписки.\n\nВнимательно изучи предоставленный ФАЙЛ ПЕРЕПИСКИ.\n\nТвои правила формирования ответа:\n\n1. СИНТАКСИС И ПУНКТУАЦИЯ (КРИТИЧЕСКИ ВАЖНО):\n- Если человек не использует заглавные буквы в начале предложений — ты тоже должен писать всё со строчной.\n- Если человек не ставит точки в конце предложений — ты не ставишь точки.\n- Скопируй частоту использования эмодзи (какие именно эмодзи, как часто, ставятся ли они в начале, в середине или в конце).\n- Обрати внимание на скобки: использует ли человек ")" или ")))" вместо эмодзи.\n- Если человек дробит мысли на много коротких сообщений, генерируй свой ответ тоже короткими фразами (используй символ "\\n" для имитации разделения сообщений).\n\n2. ЛЕКСИКА И ЖАРГОН:\n- Используй ровно те же слова-паразиты, междометия ("ну", "типа", "короче", "хз", "ага").\n- Если в тексте есть мат, сленг, ошибки в словах, сокращения (спс, пж) — используй их точно так же.\n- Никогда не используй сложные литературные слова, если их нет в исходном тексте.\n\n3. ТОН И ХАРАКТЕР:\n- Улови общее настроение: сарказм, токсичность, радость, сухость, пассивная агрессия, лаконичность.\n- Если человек отвечает односложно ("да", "нет", "ясно") — отвечай так же. Если он пишет длинные полотна — пиши развернуто.\n\n4. СОДЕРЖАНИЕ И ЗНАНИЯ:\n- Опирайся на факты из переписки (имена общих знакомых, места, локальные шутки).\n- Если тебя спрашивают о чем-то, чего нет в переписке, придумай ответ, который был бы максимально органичен для этого персонажа.\n\n5. ЗАПРЕЩЕНО:\n- Запрещено использовать фразы вроде "Чем я могу помочь?", "Конечно, я отвечу", "Как ИИ, я...".\n- Запрещено извиняться в стиле AI.\n- Запрещено структурировать текст списками, если человек так не делает.\n\nТвоя задача — чтобы собеседник не смог отличить твой ответ от ответа реального человека.\n\nФАЙЛ ПЕРЕПИСКИ:\n__PERSONA_PLACEHOLDER__';
+
+// ============================================================
+// Состояние
+// ============================================================
+var urlParams = new URLSearchParams(window.location.search);
+var urlToken = urlParams.get('token');
+
+var personaText = localStorage.getItem(STORAGE_PERSONA) || '';
+var history = [];
+
+// ===== ЕДИНЫЕ ПАРАМЕТРЫ ДЛЯ ВСЕХ ПОЛЬЗОВАТЕЛЕЙ (захардкожены, настройки скрыты) =====
+var selectedModel = 'deepseek/deepseek-chat';
+var temperature = 0.7;
+var maxTokens = 1024;
+var DEFAULT_API_BASE = 'https://knee-sierra-contently.ngrok-free.dev';
+
+// Автоподстановка ngrok-URL из параметра ?api= (передаётся ботом),
+// иначе используем захардкоженный API URL по умолчанию.
+var apiBase = DEFAULT_API_BASE;
+(function() {
+    var urlApi = urlParams.get('api');
+    if (urlApi) {
+        apiBase = urlApi.replace(/\/$/, '');
+    }
+})();
+var loading = false;
+
+try {
+    history = JSON.parse(localStorage.getItem(STORAGE_HISTORY) || '[]');
+} catch (e) { history = []; }
+
+// Telegram Web App
+var tg = window.Telegram && window.Telegram.WebApp;
+if (tg) {
+    tg.ready();
+    tg.expand();
+    tg.setHeaderColor('#17212b');
+    tg.setBackgroundColor('#0e1621');
+}
+
+// ============================================================
+// Загрузка persona через API (если передан токен)
+// ============================================================
+async function loadPersonaFromApi(token) {
+    if (!apiBase) {
+        showToast('⚠️ Не настроен API URL (ngrok)');
+        return false;
+    }
+    try {
+        var url = apiBase.replace(/\/$/, '') + '/api/persona/' + token;
+        console.log('[API] Fetching persona from:', url);
+        // Заголовок ngrok-skip-browser-warning обязателен для бесплатного ngrok,
+        // иначе он возвращает HTML-страницу предупреждения вместо JSON.
+        var resp = await fetch(url, {
+            headers: { 'ngrok-skip-browser-warning': 'true' }
+        });
+        if (!resp.ok) {
+            console.error('[API] Failed:', resp.status);
+            showToast('⚠️ Не удалось загрузить файл с сервера');
+            return false;
+        }
+        var data = await resp.json();
+        if (data.persona) {
+            personaText = data.persona;
+            localStorage.setItem(STORAGE_PERSONA, personaText);
+            console.log('[API] Persona loaded, length:', personaText.length);
+            showToast('✅ Файл загружен (' + personaText.length + ' симв.)');
+            return true;
+        }
+    } catch (e) {
+        console.error('[API] Error:', e);
+        showToast('⚠️ Ошибка соединения с сервером');
+    }
+    return false;
+}
+
+// ============================================================
+// UI
+// ============================================================
+function showSetup() {
+    document.getElementById('setupScreen').style.display = 'flex';
+    document.getElementById('messagesArea').style.display = 'none';
+    document.getElementById('inputBar').style.display = 'none';
+    document.getElementById('typing').style.display = 'none';
+    document.getElementById('chatStatus').textContent = 'загрузите файл индивидуальности';
+    applyProfileToUI();
+}
+
+function showChat() {
+    document.getElementById('setupScreen').style.display = 'none';
+    document.getElementById('messagesArea').style.display = 'flex';
+    document.getElementById('inputBar').style.display = 'flex';
+    document.getElementById('chatStatus').textContent = 'в сети';
+    applyProfileToUI();
+
+    var input = document.getElementById('messageInput');
+    input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); sendMessage(); }
+    });
+
+    if (history.length === 0) {
+        addMessage('in', 'Привет! Я готов общаться 😊 Напиши мне что-нибудь.');
+    }
+    renderHistory();
+    scrollToBottom();
+    input.focus();
+}
+
+// ============================================================
+// Загрузка файла (локально)
+// ============================================================
+document.getElementById('fileInput').addEventListener('change', function(e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(event) {
+        personaText = event.target.result;
+        localStorage.setItem(STORAGE_PERSONA, personaText);
+        history = [];
+        localStorage.setItem(STORAGE_HISTORY, JSON.stringify(history));
+        showToast('✅ Файл загружен (' + personaText.length + ' симв.)');
+        showChat();
+    };
+    reader.onerror = function() { showToast('Не удалось прочитать файл'); };
+    reader.readAsText(file);
+    e.target.value = '';
+});
+
+// ============================================================
+// Сообщения
+// ============================================================
+function addMessage(role, text) {
+    var area = document.getElementById('messagesArea');
+    var msg = document.createElement('div');
+    msg.className = 'message ' + role;
+    var now = new Date();
+    var time = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+    var ticks = role === 'out' ? '<span class="ticks">✓✓</span>' : '';
+    msg.innerHTML = '<div class="bubble"><span class="text"></span><span class="meta"><span class="time">' + time + '</span>' + ticks + '</span></div>';
+    msg.querySelector('.text').textContent = text;
+    area.appendChild(msg);
+    scrollToBottom();
+    return msg;
+}
+
+function renderHistory() {
+    var area = document.getElementById('messagesArea');
+    area.innerHTML = '';
+    history.forEach(function(item) {
+        addMessage(item.role === 'assistant' ? 'in' : 'out', item.content);
+    });
+}
+
+function scrollToBottom() {
+    var area = document.getElementById('messagesArea');
+    area.scrollTop = area.scrollHeight;
+}
+
+// ============================================================
+// OpenRouter API
+// ============================================================
+function buildSystemPrompt() {
+    return PROMPT.replace('__PERSONA_PLACEHOLDER__', personaText.slice(0, 50000));
+}
+
+function buildMessages() {
+    var messages = [{ role: 'system', content: buildSystemPrompt() }];
+    var lastMsgs = history.slice(-20);
+    lastMsgs.forEach(function(item) {
+        messages.push({ role: item.role, content: item.content });
+    });
+    return messages;
+}
+
+async function callOpenRouter(messages) {
+    if (!OPENROUTER_API_KEY) return '⚠️ API-ключ не настроен.';
+
+    var body = {
+        model: selectedModel,
+        messages: messages,
+        temperature: temperature,
+        max_tokens: maxTokens,
+        stream: false
+    };
+
+    try {
+        var controller = new AbortController();
+        var timeout = setTimeout(function() { controller.abort(); }, 60000);
+
+        var response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + OPENROUTER_API_KEY
+            },
+            body: JSON.stringify(body),
+            signal: controller.signal
+        });
+        clearTimeout(timeout);
+
+        if (response.status === 200) {
+            var data = await response.json();
+            var text = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+            return text ? text.trim() : 'Хм...';
+        }
+
+        if (response.status === 401 || response.status === 403) {
+            return '⚠️ Ошибка авторизации OpenRouter. Проверьте API-ключ.';
+        }
+
+        var errorDetail = '';
+        try {
+            var errData = await response.json();
+            errorDetail = (errData && errData.error && errData.error.message) || '';
+        } catch (e) {}
+
+        if (errorDetail && errorDetail.toLowerCase().indexOf('insufficient') !== -1) {
+            return '⚠️ Недостаточно средств/токенов на OpenRouter. Пополните баланс.';
+        }
+        if (errorDetail && errorDetail.toLowerCase().indexOf('free') !== -1) {
+            return '⚠️ Бесплатная модель временно недоступна (лимит запросов). Попробуйте позже.';
+        }
+
+        throw new Error('HTTP ' + response.status + (errorDetail ? ': ' + errorDetail : ''));
+    } catch (err) {
+        console.error('OpenRouter call failed:', err);
+        return '⚠️ Нет соединения с нейросетью. Попробуйте ещё раз.';
+    }
+}
+
+// ============================================================
+// Отправка сообщения
+// ============================================================
+async function sendMessage() {
+    if (loading) return;
+
+    var input = document.getElementById('messageInput');
+    var text = input.value.trim();
+    if (!text) return;
+
+    addMessage('out', text);
+    history.push({ role: 'user', content: text });
+    localStorage.setItem(STORAGE_HISTORY, JSON.stringify(history));
+
+    input.value = '';
+    input.disabled = true;
+    document.getElementById('sendBtn').disabled = true;
+    loading = true;
+
+    var typing = document.getElementById('typing');
+    typing.style.display = 'flex';
+    scrollToBottom();
+
+    var messages = buildMessages();
+    var reply = await callOpenRouter(messages);
+
+    typing.style.display = 'none';
+    addMessage('in', reply);
+    history.push({ role: 'assistant', content: reply });
+    localStorage.setItem(STORAGE_HISTORY, JSON.stringify(history));
+
+    input.disabled = false;
+    document.getElementById('sendBtn').disabled = false;
+    loading = false;
+    input.focus();
+}
+
+// ============================================================
+// Сброс
+// ============================================================
+function resetChat() {
+    if (loading) return;
+    if (!confirm('Очистить файл индивидуальности и историю чата?')) return;
+    personaText = '';
+    history = [];
+    localStorage.removeItem(STORAGE_PERSONA);
+    localStorage.removeItem(STORAGE_HISTORY);
+    showSetup();
+    showToast('🗑️ Данные очищены');
+}
+
+// ============================================================
+// Тост
+// ============================================================
+var toastTimer;
+function showToast(text) {
+    var toast = document.getElementById('toast');
+    toast.textContent = text;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function() { toast.classList.remove('show'); }, 2200);
+}
+
+// ============================================================
+// Профиль (шторка + редактирование)
+// ============================================================
+var STORAGE_PROFILE = 'aiclone_profile';
+
+function getProfile() {
+    try {
+        return JSON.parse(localStorage.getItem(STORAGE_PROFILE) || 'null') || {};
+    } catch (e) { return {}; }
+}
+
+function saveProfileStorage(p) {
+    localStorage.setItem(STORAGE_PROFILE, JSON.stringify(p));
+}
+
+function applyProfileToUI() {
+    var p = getProfile();
+    var name = p.name || 'AI Собеседник';
+    var avatar = p.avatar || '🤖';
+
+    document.getElementById('chatName').textContent = name;
+    document.getElementById('avatar').textContent = avatar;
+    document.getElementById('profileName').textContent = name;
+    document.getElementById('profileUsername').textContent = p.username || '—';
+    document.getElementById('profilePhone').textContent = p.phone || '—';
+    document.getElementById('profileBio').textContent = p.bio || '—';
+
+    var pa = document.getElementById('profileAvatar');
+    var ea = document.getElementById('editAvatar');
+    pa.innerHTML = avatar && avatar.indexOf('data:') === 0 ? '<img src="' + avatar + '">' : avatar;
+    ea.innerHTML = avatar && avatar.indexOf('data:') === 0 ? '<img src="' + avatar + '">' : avatar;
+}
+
+function openProfile() {
+    applyProfileToUI();
+    document.getElementById('profileSheet').classList.add('open');
+}
+
+function closeProfile() {
+    document.getElementById('profileSheet').classList.remove('open');
+}
+
+function openEditProfile() {
+    var p = getProfile();
+    document.getElementById('editName').value = p.name || '';
+    document.getElementById('editUsername').value = p.username || '';
+    document.getElementById('editPhone').value = p.phone || '';
+    document.getElementById('editBio').value = p.bio || '';
+    var ea = document.getElementById('editAvatar');
+    var avatar = p.avatar || '🤖';
+    ea.innerHTML = avatar && avatar.indexOf('data:') === 0 ? '<img src="' + avatar + '">' : avatar;
+    document.getElementById('editModal').classList.add('show');
+}
+
+function closeEditProfile() {
+    document.getElementById('editModal').classList.remove('show');
+}
+
+function saveProfile() {
+    var p = getProfile();
+    p.name = document.getElementById('editName').value.trim() || 'AI Собеседник';
+    p.username = document.getElementById('editUsername').value.trim();
+    p.phone = document.getElementById('editPhone').value.trim();
+    p.bio = document.getElementById('editBio').value.trim();
+    saveProfileStorage(p);
+    applyProfileToUI();
+    closeEditProfile();
+    showToast('✅ Профиль сохранён');
+}
+
+document.getElementById('avatarInput').addEventListener('change', function(e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(event) {
+        var p = getProfile();
+        p.avatar = event.target.result;
+        saveProfileStorage(p);
+        applyProfileToUI();
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+});
+
+document.getElementById('avatar').addEventListener('click', function() {
+    openProfile();
+});
+document.getElementById('chatName').addEventListener('click', function() {
+    openProfile();
+});
+
+// ============================================================
+// Инициализация
+// ============================================================
+function init() {
+    applyProfileToUI();
+
+    if (urlToken) {
+        loadPersonaFromApi(urlToken).then(function(ok) {
+            if (ok) { showChat(); }
+            else if (personaText) { showChat(); }
+            else { showSetup(); }
+        });
+    } else if (personaText) {
+        showChat();
+    } else {
+        showSetup();
+    }
+}
+
+init();
+</script>
+
+</body>
+</html>
